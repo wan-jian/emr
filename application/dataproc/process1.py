@@ -9,17 +9,66 @@ import re
 
 
 def process1_1(process):
-    file_path = os.path.join(process['source_dir'][0], '30481.docx')
+    for dir in process['source_dir']:
+        print("Reading all files from {}".format(dir))
+        files = os.listdir(dir)
+        #files = ['56444.docx']
+        for file in files:
+            if not file.endswith('.docx'):
+                continue
+            print("Reading {}".format(file))
+            read_docx(os.path.join(dir, file))
+
+
+def read_docx(file_path):
     doc = docx.Document(file_path)
     full_text = ''
     for para in doc.paragraphs:
         full_text = full_text + para.text + '\n'
 
+    # 将full_text分成三部份admission_record_text、progress_note_text、discharge_record_text
+
+    regex ='(入  院  记  录.*?)(首次病程记录|出  院  记  录)'
+    r = re.search(regex, full_text, re.S)
+    if r is not None:
+        admission_record_text = r.group(1)
+    else:
+        regex = '入  院  记  录.*'
+        r = re.search(regex, full_text, re.S)
+        admission_record_text = r.group() if r is not None else ''
+
+    regex ='(首次病程记录.*?)(入  院  记  录|出  院  记  录)'
+    r = re.search(regex, full_text, re.S)
+    if r is not None:
+        progress_note_text = r.group(1)
+    else:
+        regex = '首次病程记录.*'
+        r = re.search(regex, full_text, re.S)
+        progress_note_text = r.group() if r is not None else ''
+
+    regex ='(出  院  记  录.*?)(入  院  记  录|首次病程记录)'
+    r = re.search(regex, full_text, re.S)
+    if r is not None:
+        discharge_record_text = r.group(1)
+    else:
+        regex ='出  院  记  录.*'
+        r = re.search(regex, full_text, re.S)
+        discharge_record_text = r.group() if r is not None else ''
+
+    regex = '入  院  记  录.*出  院  记  录'
+    r = re.search(regex, full_text, re.S)
+    if r is not None:
+        t1 = 0
+        t2 = 1
+    else:
+        t1 = 1
+        t2 = 0
+
     admission_record = dict()
     progress_note = dict()
     discharge_record = dict()
 
-    table = doc.tables[0]
+    table = doc.tables[t1]
     admission_record['姓名'] = table.cell(0, 1).text
     admission_record['职业'] = table.cell(0, 3).text
     admission_record['性别'] = table.cell(1, 1).text
@@ -33,7 +82,7 @@ def process1_1(process):
     admission_record['民族'] = table.cell(5, 1).text
     admission_record['病史陈述者'] = table.cell(5, 3).text
 
-    table = doc.tables[1]
+    table = doc.tables[t2]
     i = 0 if len(table.rows) == 3 else 1
     discharge_record['入院日期'] = table.cell(i, 1).text
     discharge_record['出院日期'] = table.cell(i, 3).text
@@ -41,26 +90,12 @@ def process1_1(process):
     discharge_record['出院诊断'] = table.cell(i + 1, 3).text
     discharge_record['住院天数'] = table.cell(i + 2, 1).text
 
-    # 将full_text分成三部份admission_record_text、progress_note_text、discharge_record_text
-
-    regex='(入  院  记  录.*?)(首次病程记录|出  院  记  录)'
-    r = re.search(regex, full_text, re.S)
-    admission_record_text = r.group(1) if r is not None else ''
-
-    regex='(首次病程记录.*?)(入  院  记  录|出  院  记  录)'
-    r = re.search(regex, full_text, re.S)
-    progress_note_text = r.group(1) if r is not None else ''
-
-    regex='出  院  记  录.*'
-    r = re.search(regex, full_text, re.S)
-    discharge_record_text = r.group() if r is not None else ''
-
     # 处理入院记录
 
     regex = '主诉\(Chief complaint\)：(?P<主诉>.+)\n' \
             '现病史（History of Present Illness）:(?P<现病史>.+)\n' \
             '既往史（Past History）:(?P<既往史>.+)\n' \
-            '目前使用的药物（At Present The Drugs）：（含我院用药情况及患者提供的用药情况）\n(?P<目前使用药物>.+)\n' \
+            '目前使用的药物（At Present The Drugs）：（含我院用药情况及患者提供的用药情况）(?P<目前使用药物>.+)\n' \
             '成瘾药物\(Drug Addiction\):(?P<成瘾药物>.+)\n' \
             '个人史（Personal History）:(?P<个人史>.+?)\n' \
             '(?P<menstrual>.*)' \
@@ -72,12 +107,12 @@ def process1_1(process):
             '疾病相关评分:\n(?P<疾病相关评分>.+)\n' \
             '营养受损评分:\n(?P<营养受损评分>.+)\n' \
             '年龄评分:(?P<年龄评分>.+)\n' \
-            '营养风险评分:(?P<营养风险评分>.+)分.*\n' \
-            '是否请营养科会诊:(?P<是否请营养科会诊>.+)\n\n' \
-            '功能评估:\(Function  Accessment\)\n((入院ADL评分:(?P<入院ADL评分>.+)分)|(入院ADL评分分级:(?P<入院ADL评分分级>.+)级)).*\n' \
-            '是否请康复科会诊:(?P<是否请康复科会诊>.+)\n\n' \
-            '心理评估\(Psychological Assessment\)\n护理入院心理评估是否阳性:(?P<护理入院心理评估是否阳性>.+)\n' \
-            '是否请心理卫生科会诊:(?P<是否请心理卫生科会诊>.+)\n'
+            '营养风险评分:(?P<营养风险评分>.+?分).*\n' \
+            '是否请营养科会诊:(?P<是否请营养科会诊>.+)\n' \
+            '功能评估:\(Function  Accessment\)\n((入院ADL评分:(?P<入院ADL评分>.*))|(入院ADL评分分级:(?P<入院ADL评分分级>.*)))\n' \
+            '是否请康复科会诊:(?P<是否请康复科会诊>.+)\n' \
+            '心理评估\(Psychological Assessment\)\n护理入院心理评估是否阳性:(?P<护理入院心理评估是否阳性>.*)\n' \
+            '是否请心理卫生科会诊:(?P<是否请心理卫生科会诊>.*)\n初步诊断'
 
     match = re.search(regex, admission_record_text, re.S)
     a = match.groupdict()
