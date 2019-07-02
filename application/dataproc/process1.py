@@ -12,11 +12,13 @@ def process1_1(process):
     for dir in process['source_dir']:
         print("Reading all files from {}".format(dir))
         files = os.listdir(dir)
-        #files = ['56444.docx']
+        #files = ['138060.docx']
+        count = 0
         for file in files:
             if not file.endswith('.docx'):
                 continue
-            print("Reading {}".format(file))
+            count = count + 1
+            print("[{}] Reading {}".format(count, file))
             read_docx(os.path.join(dir, file))
 
 
@@ -28,45 +30,56 @@ def read_docx(file_path):
 
     # 将full_text分成三部份admission_record_text、progress_note_text、discharge_record_text
 
-    regex ='(入  院  记  录.*?)(首次病程记录|出  院  记  录)'
+    regex = '入  院  记  录.*'
     r = re.search(regex, full_text, re.S)
-    if r is not None:
-        admission_record_text = r.group(1)
-    else:
-        regex = '入  院  记  录.*'
-        r = re.search(regex, full_text, re.S)
-        admission_record_text = r.group() if r is not None else ''
+    admission_record_text = r.group() if r is not None else ''
+    admission_record_text = admission_record_text.split('首次病程记录')[0]
+    #admission_record_text = admission_record_text.split('出  院  记  录')[0]
+    admission_record_text = re.split('(出  院  记  录)|(入院情况.*住院经过)', admission_record_text, 1, re.S)[0]
 
-    regex ='(首次病程记录.*?)(入  院  记  录|出  院  记  录)'
+    regex = '首次病程记录.*'
     r = re.search(regex, full_text, re.S)
-    if r is not None:
-        progress_note_text = r.group(1)
-    else:
-        regex = '首次病程记录.*'
-        r = re.search(regex, full_text, re.S)
-        progress_note_text = r.group() if r is not None else ''
+    progress_note_text = r.group() if r is not None else ''
+    progress_note_text = progress_note_text.split('入  院  记  录')[0]
+    #progress_note_text = progress_note_text.split('出  院  记  录')[0]
+    progress_note_text = re.split('(出  院  记  录)|(入院情况.*住院经过)', progress_note_text, 1, re.S)[0]
 
-    regex ='(出  院  记  录.*?)(入  院  记  录|首次病程记录)'
+
+    regex = '死亡记录.*'
     r = re.search(regex, full_text, re.S)
     if r is not None:
-        discharge_record_text = r.group(1)
+        death_record_text = r.group()
+        death_record_text = death_record_text.split('首次病程记录')[0]
+        death_record_text = death_record_text.split('入  院  记  录')[0]
+        alive = False
     else:
-        regex ='出  院  记  录.*'
+        regex = '(出  院  记  录.*)|(入院情况.*住院经过.*)'
         r = re.search(regex, full_text, re.S)
         discharge_record_text = r.group() if r is not None else ''
+        discharge_record_text = discharge_record_text.split('首次病程记录')[0]
+        discharge_record_text = discharge_record_text.split('入  院  记  录')[0]
+        alive = True
 
-    regex = '入  院  记  录.*出  院  记  录'
-    r = re.search(regex, full_text, re.S)
-    if r is not None:
-        t1 = 0
-        t2 = 1
+    # 判断入院记录和出院记录的先后顺序
+
+    if alive:
+        regex = '入  院  记  录.*((出  院  记  录.*)|(入院情况.*住院经过))'
+        r = re.search(regex, full_text, re.S)
+        if r is not None:
+            t1 = 0
+            t2 = 1
+        else:
+            t1 = 1
+            t2 = 0
     else:
-        t1 = 1
-        t2 = 0
+        t1 = 0
 
     admission_record = dict()
     progress_note = dict()
-    discharge_record = dict()
+    if alive:
+        discharge_record = dict()
+    else:
+        death_record = dict()
 
     table = doc.tables[t1]
     admission_record['姓名'] = table.cell(0, 1).text
@@ -82,13 +95,24 @@ def read_docx(file_path):
     admission_record['民族'] = table.cell(5, 1).text
     admission_record['病史陈述者'] = table.cell(5, 3).text
 
-    table = doc.tables[t2]
-    i = 0 if len(table.rows) == 3 else 1
-    discharge_record['入院日期'] = table.cell(i, 1).text
-    discharge_record['出院日期'] = table.cell(i, 3).text
-    discharge_record['入院诊断'] = table.cell(i + 1, 1).text
-    discharge_record['出院诊断'] = table.cell(i + 1, 3).text
-    discharge_record['住院天数'] = table.cell(i + 2, 1).text
+    if alive:
+        table = doc.tables[t2]
+        if len(table.rows) == 3:
+            i = 0
+            c = 0
+        elif len(table.rows) == 4:
+            i = 1
+            c = 0
+        else:
+            # 如果有5行，出院日期和出院诊断是在第5列，用c变量来调整
+            i = 2
+            c = 1
+
+        discharge_record['入院日期'] = table.cell(i, 1).text
+        discharge_record['出院日期'] = table.cell(i, c + 3).text
+        discharge_record['入院诊断'] = table.cell(i + 1, 1).text
+        discharge_record['出院诊断'] = table.cell(i + 1, c + 3).text
+        discharge_record['住院天数'] = table.cell(i + 2, 1).text
 
     # 处理入院记录
 
@@ -103,7 +127,7 @@ def read_docx(file_path):
             '家族史（Family History）:(?P<家族史>.+)\n' \
             '体格检查（Physical Examination）：(?P<体格检查>.+)\n' \
             '辅助检查（Diagnostic Examination）：(?P<辅助检查>.+)\n' \
-            '营养风险筛查\(Nutritional Assessment\).+体重指数\(BMI\):(?P<体重指数>.+)\n' \
+            '营养风险筛查\(Nutritional.+体重指数\(BMI\):(?P<体重指数>.+)\n' \
             '疾病相关评分:\n(?P<疾病相关评分>.+)\n' \
             '营养受损评分:\n(?P<营养受损评分>.+)\n' \
             '年龄评分:(?P<年龄评分>.+)\n' \
@@ -168,11 +192,11 @@ def read_docx(file_path):
 
     # 处理首次病程记录
 
-    regex = '病例特点： \n(?P<病例特点>.+)\n' \
-            '初步诊断：(?P<初步诊断1>.+)\n' \
-            '诊断依据：(?P<诊断依据>.+)\n' \
-            '鉴别诊断：(?P<鉴别诊断>.+)\n' \
-            '诊疗计划：\n(?P<诊疗计划>.+)\n.+(医师签名：|记录医生：)'
+    regex = '病例特点：(?P<病例特点>.*)\n' \
+            '初步诊断：(?P<初步诊断1>.*)\n' \
+            '诊断依据：(?P<诊断依据>.*)\n' \
+            '鉴别诊断：(?P<鉴别诊断>.*)' \
+            '诊疗计划：(?P<诊疗计划>.*)\n.+(医师签名：|记录医生：)'
 
     match = re.search(regex, progress_note_text, re.S)
     a = match.groupdict()
@@ -183,36 +207,68 @@ def read_docx(file_path):
     progress_note['鉴别诊断'] = a['鉴别诊断']
     progress_note['诊疗计划'] = a['诊疗计划']
 
-    # 处理出院记录
 
-    regex = '入院情况:(?P<入院情况>.+)\n' \
-            '住院经过:(?P<住院经过>.+)\n' \
-            '出院情况:(?P<出院情况>.+)\n' \
-            '出院医嘱(:|：)(?P<出院医嘱>.+)\n' \
-            '健康教育:(?P<健康教育>.+)\n' \
-            '随访计划:(?P<随访计划>.+)医师签名：'
+    if alive:
+        # 处理出院记录
+        regex = '入院情况:(?P<入院情况>.+)\n' \
+                '住院经过(?P<住院经过>.+)\n' \
+                '出院情况:(?P<出院情况>.+)\n' \
+                '.*出院医嘱(:|：)(?P<出院医嘱>.+)\n' \
+                '健康教育:(?P<健康教育>.+)\n' \
+                '随访计划:(?P<随访计划>.+)医师签名：'
 
-    match = re.search(regex, discharge_record_text, re.S)
-    a = match.groupdict()
+        match = re.search(regex, discharge_record_text, re.S)
+        a = match.groupdict()
 
-    discharge_record['入院情况'] = a['入院情况']
-    discharge_record['住院经过'] = a['住院经过']
-    discharge_record['出院情况'] = a['出院情况']
-    discharge_record['出院医嘱'] = a['出院医嘱']
-    discharge_record['健康教育'] = a['健康教育']
-    discharge_record['随访计划'] = a['随访计划']
+        discharge_record['入院情况'] = a['入院情况']
+        discharge_record['住院经过'] = a['住院经过']
+        discharge_record['出院情况'] = a['出院情况']
+        discharge_record['出院医嘱'] = a['出院医嘱']
+        discharge_record['健康教育'] = a['健康教育']
+        discharge_record['随访计划'] = a['随访计划']
+    else:
+        # 处理死亡记录
+        regex = '入院时间：(?P<入院时间>.+)' \
+                '死亡时间：(?P<死亡时间>.+)\n' \
+                '(?P<diagnosis>.*)' \
+                '入院情况：(?P<入院情况>.+)\n' \
+                '诊疗经过：(?P<诊疗经过>.+)\n' \
+                '死亡原因：(?P<死亡原因>.+)\n' \
+                '死亡诊断：(?P<死亡诊断>.+)医师签名：'
 
-    # 合并入院记录、首次病程记录、出院记录到medical_record中
+        match = re.search(regex, death_record_text, re.S)
+        a = match.groupdict()
+
+        death_record['入院时间'] = a['入院时间']
+        death_record['死亡时间'] = a['死亡时间']
+        death_record['入院情况'] = a['入院情况']
+        death_record['诊疗经过'] = a['诊疗经过']
+        death_record['死亡原因'] = a['死亡原因']
+        death_record['死亡诊断'] = a['死亡诊断']
+        diagnosis = a['diagnosis']
+        r = diagnosis.split('入院诊断：')
+        if len(r) > 1:
+            death_record['入院诊断'] = r[1]
+        else:
+            death_record['入院诊断'] = ''
+
+    # 合并入院记录、首次病程记录、出院记录、死亡记录到medical_record中
 
     medical_record = dict()
     medical_record['入院记录'] = admission_record
     medical_record['首次病程记录'] = progress_note
-    medical_record['出院记录'] = discharge_record
+    if alive:
+        medical_record['出院记录'] = discharge_record
+    else:
+        medical_record['死亡记录'] = death_record
 
     trim_dict_values(medical_record)
     trim_dict_values(medical_record['入院记录'])
     trim_dict_values(medical_record['首次病程记录'])
-    trim_dict_values(medical_record['出院记录'])
+    if alive:
+        trim_dict_values(medical_record['出院记录'])
+    else:
+        trim_dict_values(medical_record['死亡记录'])
 
     pass
 
