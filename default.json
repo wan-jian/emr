@@ -5,6 +5,8 @@
     "data_dir" : "/Users/wj/data/浙四数据/脑梗数据/11",
     "source_dir" : ["/Users/wj/data/浙四数据/脑梗数据/Desktop/216-269"],
     "mongo_db" : "emr",
-    "mongo_document" : "zju4h"
+    "mongo_collection" : "zju4h",
+    "only_check": "no",
+    "drop_collections_before_save": "yes"
   }
 ]

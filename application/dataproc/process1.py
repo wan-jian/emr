@@ -6,9 +6,18 @@ from typing import Dict, Any
 
 import docx
 import re
+from pymongo import MongoClient
 
 
 def process1_1(process):
+    only_check = True if process['only_check'].upper() == 'YES' else False
+    if not only_check:
+        client = MongoClient(host='127.0.0.1', port=27017)
+        db = client['emr']
+        col = db['zju4h']
+        if process['drop_collections_before_save'].upper() == 'YES':
+            col.delete_many({})
+
     for dir in process['source_dir']:
         print("Reading all files from {}".format(dir))
         files = os.listdir(dir)
@@ -19,7 +28,8 @@ def process1_1(process):
                 continue
             count = count + 1
             print("[{}] Reading {}".format(count, file))
-            read_docx(os.path.join(dir, file))
+            doc = read_docx(os.path.join(dir, file))
+            col.insert_one(doc)
 
 
 def read_docx(file_path):
@@ -269,6 +279,8 @@ def read_docx(file_path):
         trim_dict_values(medical_record['出院记录'])
     else:
         trim_dict_values(medical_record['死亡记录'])
+
+    return medical_record
 
     pass
 

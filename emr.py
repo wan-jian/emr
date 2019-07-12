@@ -1,6 +1,5 @@
 # coding=utf-8
-# for Leilei
-# designed by Wanwan, powered by love
+# designed by Wan Jian
 
 from application import app
 import sys
