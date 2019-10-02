@@ -29,7 +29,12 @@ def process1_1(process):
             count = count + 1
             print("[{}] Reading {}".format(count, file))
             doc = read_docx(os.path.join(dir, file))
-            col.insert_one(doc)
+            if not only_check:
+                col.insert_one(doc)
+
+    if not only_check:
+        client.close()
+
 
 
 def read_docx(file_path):
@@ -202,7 +207,8 @@ def read_docx(file_path):
 
     # 处理首次病程记录
 
-    regex = '病例特点：(?P<病例特点>.*)\n' \
+    regex = '病历号：(?P<病历号>.*)入院日期.*' \
+            '病例特点：(?P<病例特点>.*)\n' \
             '初步诊断：(?P<初步诊断1>.*)\n' \
             '诊断依据：(?P<诊断依据>.*)\n' \
             '鉴别诊断：(?P<鉴别诊断>.*)' \
@@ -211,6 +217,7 @@ def read_docx(file_path):
     match = re.search(regex, progress_note_text, re.S)
     a = match.groupdict()
 
+    progress_note['病历号'] = a['病历号']
     progress_note['病例特点'] = a['病例特点']
     progress_note['初步诊断'] = a['初步诊断1']
     progress_note['诊断依据'] = a['诊断依据']

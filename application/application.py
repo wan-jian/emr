@@ -3,7 +3,8 @@
 import sys
 import json
 import getopt
-from .dataproc.process1 import process1_1
+from .dataproc.process1_1 import process1_1
+from .dataproc.process1_2 import process1_2
 
 
 class Application:
@@ -47,9 +48,11 @@ class Application:
 
     def do_processes(self):
         for process in self.project:
+            if process['enabled'].upper() != 'YES':
+                continue
+
             print("\n>> {}: {}".format(process['process_name'], process['comment']))
             if process['process_name'] == 'process1_1':
                 process1_1(process)
-                pass
             elif process['process_name'] == 'process1_2':
                 process1_2(process)

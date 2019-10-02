@@ -3,10 +3,19 @@
     "process_name" : "process1_1",
     "comment" : "读取浙四医院的数据，并存入数据库",
     "data_dir" : "/Users/wj/data/浙四数据/脑梗数据/11",
-    "source_dir" : ["/Users/wj/data/浙四数据/脑梗数据/Desktop/216-269"],
+    "source_dir" : ["/Users/wj/data/浙四数据/脑梗数据/11"],
     "mongo_db" : "emr",
     "mongo_collection" : "zju4h",
     "only_check": "no",
-    "drop_collections_before_save": "yes"
+    "drop_collections_before_save": "yes",
+    "enabled": "no"
+  },
+  {
+    "process_name": "process1_2",
+    "comment": "将浙四医院的数据抽取到数据集合data中",
+    "from_collection": "zju4h",
+    "to_collection": "data",
+    "drop_collections_before_save": "yes",
+    "enabled": "yes"
   }
 ]
